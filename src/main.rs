@@ -1,17 +1,27 @@
 use color_eyre::eyre::Result;
-use std::str;
 
 mod transport;
+
 mod storage;
+use signature::verify_signature;
+use storage::keyvalue;
+use storage::merkle;
+
+mod signature;
 
 #[tokio::main]
 async fn main() -> Result<()> {
 
-    storage::open_trie_db();
+    let (sk, pk) = signature::new_pair();
+    let msg = b"hello world";
+    let signature = signature::new_signature(msg, &sk);
+    print!("{:?}",verify_signature(msg, &pk, &signature));
 
-    //STORAGE ROCKSDB TEST
+    // let trie = merkle::create_new();
 
-    // let database = storage::open_db("./general-data");
+    // //STORAGE ROCKSDB TEST
+
+    // let database = keyvalue::open_db("./general-data");
 
     // database.put(b"key", b"value").unwrap();
     // database.get(b"key").unwrap();

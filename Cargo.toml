@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+# utils
+
 # transport module
 qp2p = "0.28.7"
 tokio = {version = "1", features = ["full"]}
@@ -15,6 +18,9 @@ color-eyre = "0.6.2"
 # storage module
 rocksdb = "0.18.0"
 hasher = "0.1"
-cita_trie = "3.0.2"
+cita_trie = { path = "cita-trie" }
+
+# signature module
+secp256k1 = {version = "0.24.0", features = ["rand", "bitcoin_hashes"]}
 
 [features]

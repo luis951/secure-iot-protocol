@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use color_eyre::eyre::Result;
 use bytes::Bytes;
 use qp2p::{Config, Endpoint, IncomingConnections};
@@ -5,9 +8,6 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
     time::Duration,
 };
-
-#[derive(Default, Ord, PartialEq, PartialOrd, Eq, Clone, Copy)]
-struct XId(pub [u8; 32]);
 
 pub async fn create_node(port: u16) -> Result<(Endpoint, IncomingConnections)>{
 

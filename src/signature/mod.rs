@@ -11,10 +11,10 @@ pub fn new_pair() -> ([u8; 32], [u8; 33]){
     return (sk.secret_bytes(), pk.serialize());
 }
 
-pub fn generate_public_key(secret_key: &[u8]) -> secp256k1::PublicKey{
+pub fn generate_public_key(secret_key: &[u8]) -> [u8; 33] {
     let secp = Secp256k1::new();
     let sk = SecretKey::from_slice(secret_key).expect("32 bytes, within curve order");
-    PublicKey::from_secret_key(&secp, &sk)
+    PublicKey::from_secret_key(&secp, &sk).serialize()
 }
 
 pub fn new_signature(msg: &[u8], secret_key: &[u8]) -> [u8; 64]{

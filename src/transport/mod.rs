@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-pub async fn create_node(port: u16) -> Result<(Endpoint, IncomingConnections)>{
+pub async fn new_node(port: u16) -> Result<(Endpoint, IncomingConnections)>{
 
     // create an endpoint for us to listen on and send from.
     let (node, incoming_conns, _contact) = Endpoint::new_peer(
@@ -28,7 +28,7 @@ pub async fn create_node(port: u16) -> Result<(Endpoint, IncomingConnections)>{
     Ok((node, incoming_conns))
 }
 
-pub async fn callback(node: Endpoint, mut incoming_conns: IncomingConnections) -> Result<()> {
+pub async fn listen(node: Endpoint, mut incoming_conns: IncomingConnections, mut callback: Box<dyn FnMut(&Vec<u8>) + Send>) -> Result<()> {
     
     // loop over incoming connections
     while let Some((connection, mut incoming_messages)) = incoming_conns.next().await {
@@ -40,6 +40,7 @@ pub async fn callback(node: Endpoint, mut incoming_conns: IncomingConnections) -
             let response = Bytes::from("200");
             connection.send(response.clone()).await?;
             println!("{:?} replied to {:?} --> {:?}", node.local_addr(), src, response);
+            callback(&bytes.to_vec());
             println!();
         }
     }
@@ -47,7 +48,7 @@ pub async fn callback(node: Endpoint, mut incoming_conns: IncomingConnections) -
     Ok(())
 }
 
-pub async fn client(node: &Endpoint, addr: &str, msg: &'static str) -> Result<()> {
+pub async fn client(node: &Endpoint, addr: &str, msg: String) -> Result<()> {
 
     let peer: SocketAddr = addr
             .parse()

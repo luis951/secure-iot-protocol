@@ -1,13 +1,13 @@
 use std::io::Error;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use serde_big_array::BigArray;
 
 use crate::{signature};
 use crate::storage::keyvalue;
+use crate::transport;
 
-use super::Neighbors;
+use super::{Neighbors, Node};
 
 
 #[derive(Serialize, Deserialize)]
@@ -26,8 +26,9 @@ struct DataMessageType1 {
 
 impl DataMessageType1 {
     pub fn execute(&self, src: String) -> Result<(), Error> {
-        //add bussiness logic5
-        Neighbors::add(src, self.public_key);
+        //TODO: add bussiness logic (block too many node connections, verify node type)
+
+        Neighbors::add(src, Node{pk: self.public_key, is_validator: false});
         Ok(())
     }
 
@@ -39,6 +40,31 @@ impl DataMessageType1 {
         };
         data
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct DataMessageType2 {
+    neighbors: Neighbors
+}
+
+impl DataMessageType2 {
+    pub fn execute(&self, src: String) -> Result<(), Error> {
+        //TODO: add bussiness logic (block too many node connections, verify node type)
+        // let nodes = self.neighbors.neighbors;
+        // for (addr, _) in nodes {
+        //     transport::send(node, addr, msg);
+        // }
+        Ok(())
+    }
+
+    // pub fn generate() -> Self {
+    //     let sk = keyvalue::get(b"secret_key").unwrap().unwrap();
+    //     let public_key = signature::generate_public_key(sk.as_slice());
+    //     let data = DataMessageType1 {
+    //         public_key
+    //     };
+    //     data
+    // }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -80,15 +106,15 @@ impl Message {
     }
 
     fn verify(&self, src: String) -> Result<(), std::io::Error> {
-
+        // TODO: verify timestamp
         let has_pk = Neighbors::get(&src);
         match has_pk {
-            Some(has_pk) => {
-                let pk = has_pk.as_str().as_bytes();
+            Some(node) => {
+                let pk = node.pk;
                 match signature::verify_signature((
                     self.timestamp.to_string()+&serde_json::to_string(&self.data).unwrap())
                         .as_bytes(), 
-                    pk, &self.signature) {
+                    &pk, &self.signature) {
                         Ok(()) => Ok(()),
                         Err(_) => {
                             let e = std::io::Error::new(std::io::ErrorKind::Other, "Invalid signature");

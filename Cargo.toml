@@ -10,6 +10,7 @@ edition = "2021"
 # utils
 hex = "0.4"
 lazy_static = "1.4.0"
+async_once = "0.2.6"
 chrono = "0.4"
 
 # transport module

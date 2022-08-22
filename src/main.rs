@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use color_eyre::eyre::Result;
 
 mod transport;
@@ -5,30 +7,64 @@ mod signature;
 mod storage;
 mod communication;
 
+use lazy_static::lazy_static;
 use storage::keyvalue;
 use storage::merkle;
+use tokio::time::sleep;
 
 const DB_PATH: &str = "./storage.db";
+
+lazy_static!{
+    pub static ref PORT_NUMBER: String = {
+        let args: Vec<String> = std::env::args().collect();
+        match args.iter().position(|arg| arg == "-p" || arg == "--port") {
+            Some(i) => {
+                match args.get(i + 1) {
+                    Some(port) => port.to_string(),
+                    None => panic!("No port number provided"),
+                }
+            }
+            None => "8640".to_string(),
+        }
+    };
+
+    pub static ref PEER_PORT: String = {
+        let args: Vec<String> = std::env::args().collect();
+        match args.iter().position(|arg| arg == "-x" || arg == "--peer") {
+            Some(i) => {
+                match args.get(i + 1) {
+                    Some(port) => port.to_string(),
+                    None => panic!("No port number provided"),
+                }
+            }
+            None => "8641".to_string(),
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
 
-    println!("{}",communication::messages::Message::generate(1));
+    // println!("{}",communication::messages::Message::generate(1));
 
+    color_eyre::install()?;
+    let f = transport::listen(Box::new(|bytes: &Vec<u8>, src: String| {
+        let message:communication::messages::Message = serde_json::from_slice(bytes).unwrap();
+        println!("received {:?}", serde_json::to_string(&message));
+        Some("200".to_string())
+    }));
+    tokio::spawn(f);
 
-    // color_eyre::install()?;
-    // let (node1, inc_1) = transport::new_node(4433).await?;
-    // tokio::spawn(transport::listen(node1.clone(), inc_1, Box::new(|bytes| {
-    //     let message = String::from_utf8(bytes.to_vec()).unwrap();
-    //     println!("pppp {}", message);
-    // })));
-    // let (node2, inc_2) = transport::new_node(4434).await?;
-    // tokio::spawn(transport::listen(node2.clone(), inc_2, Box::new(|bytes| {
-    //     let message = String::from_utf8(bytes.to_vec()).unwrap();
-    //     println!("pppp {}", message);
-    // })));
-    // let msg = communication::generate_msg(1).unwrap();
-    // transport::client(&node2, node1.local_addr().to_string().as_str(), msg).await?;
-    // node1.close();
+    sleep(Duration::from_secs(5)).await;
+
+    println!("Sending");
+
+    storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
+
+    transport::send("127.0.0.1:".to_string()+&PEER_PORT, 
+    communication::messages::Message::generate(1).to_string()).await.unwrap();
+
+    // loop {}
 
     // let (sk, pk) = signature::new_pair();
     // let msg = b"hello world";

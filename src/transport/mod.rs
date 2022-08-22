@@ -1,61 +1,70 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use async_once::AsyncOnce;
 use color_eyre::eyre::Result;
 use bytes::Bytes;
+use lazy_static::lazy_static;
 use qp2p::{Config, Endpoint, IncomingConnections};
 use std::{
     net::{Ipv4Addr, SocketAddr},
-    time::Duration,
+    time::Duration, sync::{Arc},
 };
+use tokio::sync::Mutex;
 
-pub async fn new_node(port: u16) -> Result<(Endpoint, IncomingConnections)>{
+use crate::PORT_NUMBER;
 
-    // create an endpoint for us to listen on and send from.
-    let (node, incoming_conns, _contact) = Endpoint::new_peer(
-        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
-        &[],
-        Config {
-            idle_timeout: Duration::from_secs(60 * 60).into(), // 1 hour idle timeout.
-            ..Default::default()
-        },
-    ).await?;
 
-    println!("\n---");
-    println!("Listening on: {:?}", node.public_addr());
-    println!("---\n");
+lazy_static! {
+    // QUIC_CONN.1 = Endpoint, QUIC_CONN.2 = IncomingConnections
+    pub static ref QUIC_CONN: AsyncOnce<(Arc<Mutex<Endpoint>>, Arc<Mutex<IncomingConnections>>)> = 
+        AsyncOnce::new(async{
 
-    Ok((node, incoming_conns))
+            println!("transport args: {:?}", std::env::args().collect::<Vec<_>>());
+            let (node, incoming, _contact) = Endpoint::new_peer(
+                SocketAddr::from((Ipv4Addr::LOCALHOST, PORT_NUMBER.parse().unwrap())),
+                &[],
+                Config {
+                    idle_timeout: Duration::from_secs(60 * 60).into(), // 1 hour idle timeout.
+                    ..Default::default()
+                },
+            ).await.unwrap();
+            (Arc::new(Mutex::new(node)), Arc::new(Mutex::new(incoming)))
+        });
 }
 
-pub async fn listen(node: Endpoint, mut incoming_conns: IncomingConnections, mut callback: Box<dyn FnMut(&Vec<u8>) + Send>) -> Result<()> {
+pub async fn listen(mut callback: Box<dyn FnMut(&Vec<u8>, String)-> Option<String> + Send>) -> Result<()> {
     
     // loop over incoming connections
-    while let Some((connection, mut incoming_messages)) = incoming_conns.next().await {
+    while let Some((connection, mut incoming_messages)) = 
+    QUIC_CONN.get().await.1.lock().await.next().await {
         let src = connection.remote_address();
 
         // loop over incoming messages
         while let Some(bytes) = incoming_messages.next().await? {
-            println!("{:?} received from {:?} --> {:?}", node.local_addr(), src, bytes);
-            let response = Bytes::from("200");
-            connection.send(response.clone()).await?;
-            println!("{:?} replied to {:?} --> {:?}", node.local_addr(), src, response);
-            callback(&bytes.to_vec());
-            println!();
+            match callback(&bytes.to_vec(), 
+            src.to_string()) {
+                Some(response) => {
+                    connection.send(Bytes::from(response)).await?;
+                }
+                None => {
+                    println!("Error: No response");
+                }
+            }
         }
     }
 
     Ok(())
 }
 
-pub async fn client(node: &Endpoint, addr: &str, msg: String) -> Result<()> {
+pub async fn send(addr: String, msg: String) -> Result<()> {
 
     let peer: SocketAddr = addr
             .parse()
             .expect("Invalid SocketAddr.  Use the form 127.0.0.1:1234");
         let msg = Bytes::from(msg);
         println!("Sending to {:?} --> {:?}\n", peer, msg);
-        let (conn, mut incoming) = node.connect_to(&peer).await?;
+        let (conn, mut incoming) = QUIC_CONN.get().await.0.lock().await.connect_to(&peer).await?;
         conn.send(msg.clone()).await?;
         // `Endpoint` no longer having `connection_pool` to hold established connection.
         // Which means the connection get closed immediately when it reaches end of life span.

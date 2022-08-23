@@ -28,7 +28,7 @@ lazy_static!{
         }
     };
 
-    pub static ref PEER_PORT: String = {
+    pub static ref PEER_ADDR: String = {
         let args: Vec<String> = std::env::args().collect();
         match args.iter().position(|arg| arg == "-x" || arg == "--peer") {
             Some(i) => {
@@ -37,7 +37,9 @@ lazy_static!{
                     None => panic!("No port number provided"),
                 }
             }
-            None => "8641".to_string(),
+            None => {
+                println!("No address provided");
+                "".to_string()},
         }
     };
 }
@@ -48,12 +50,16 @@ async fn main() -> Result<()> {
     // println!("{}",communication::messages::Message::generate(1));
 
     color_eyre::install()?;
-    let f = transport::listen(Box::new(|bytes: &Vec<u8>, src: String| {
-        let message:communication::messages::Message = serde_json::from_slice(bytes).unwrap();
-        println!("received {:?}", serde_json::to_string(&message));
-        Some("200".to_string())
-    }));
-    tokio::spawn(f);
+    tokio::spawn(
+        transport::listen(
+            Box::new(|bytes: &Vec<u8>, src: String| {
+            let message:communication::messages::Message = serde_json::from_slice(bytes).unwrap();
+            // println!("received {:?}", serde_json::to_string(&message));
+            message.execute(src);
+            Some("200".to_string())
+            })
+        )
+    );
 
     sleep(Duration::from_secs(5)).await;
 
@@ -61,7 +67,7 @@ async fn main() -> Result<()> {
 
     storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
 
-    transport::send("127.0.0.1:".to_string()+&PEER_PORT, 
+    transport::send(PEER_ADDR.to_string(), 
     communication::messages::Message::generate(1).to_string()).await.unwrap();
 
     // loop {}

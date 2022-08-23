@@ -15,8 +15,10 @@ use tokio::sync::Mutex;
 use crate::PORT_NUMBER;
 
 
+
 lazy_static! {
     // QUIC_CONN.1 = Endpoint, QUIC_CONN.2 = IncomingConnections
+
     pub static ref QUIC_CONN: AsyncOnce<(Arc<Mutex<Endpoint>>, Arc<Mutex<IncomingConnections>>)> = 
         AsyncOnce::new(async{
 
@@ -31,6 +33,11 @@ lazy_static! {
             ).await.unwrap();
             (Arc::new(Mutex::new(node)), Arc::new(Mutex::new(incoming)))
         });
+    
+
+    pub static ref LOCAL_ADDR: AsyncOnce<std::string::String> = AsyncOnce::new(async{
+        QUIC_CONN.get().await.0.lock().await.public_addr().to_string()
+    });
 }
 
 pub async fn listen(mut callback: Box<dyn FnMut(&Vec<u8>, String)-> Option<String> + Send>) -> Result<()> {

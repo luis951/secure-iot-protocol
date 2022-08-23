@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -73,13 +73,13 @@ enum Data {
 }
 
 impl Data {
-    pub fn execute(&self, src: String) -> Result<(), Error> {
+    fn execute(&self, src: String) -> Result<(), Error> {
         match self {
             Data::MessageType1(data) => data.execute(src),
         }
     }
 
-    pub fn generate(msg_type: u32) -> Self {
+    fn generate(msg_type: u32) -> Self {
         match msg_type {
             1 => Data::MessageType1(DataMessageType1::generate()),
             _ => panic!("Invalid message type"),
@@ -90,6 +90,7 @@ impl Data {
 impl Message {
     pub fn generate(message_type: u32) -> String {
         let timestamp = chrono::Utc::now().timestamp();
+
         let data: Data = match message_type {
             1 => Data::generate(message_type),
             _ => panic!("Invalid message type")
@@ -103,6 +104,16 @@ impl Message {
             data,
             signature
         }).unwrap()
+    }
+
+    pub fn execute(&self, src: String) -> Result<(), Error> {
+        match self.verify(src.clone()) {
+            Ok(_) => {
+                let data = self.data.execute(src.clone());
+                Ok(())
+            }
+            Err(_) => Err(Error::new(ErrorKind::Other, "Invalid signature")),
+        }
     }
 
     fn verify(&self, src: String) -> Result<(), std::io::Error> {

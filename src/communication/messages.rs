@@ -27,7 +27,6 @@ struct DataMessageType1 {
 impl DataMessageType1 {
     pub fn execute(&self, src: String) -> Result<(), Error> {
         //TODO: add bussiness logic (block too many node connections, verify node type)
-
         Neighbors::add(src, Node{pk: self.public_key, is_validator: false});
         Ok(())
     }
@@ -68,14 +67,24 @@ impl DataMessageType2 {
 }
 
 #[derive(Serialize, Deserialize)]
+struct DataMessageType3 {
+    // neighbors: Neighbors
+}
+
+
+
+#[derive(Serialize, Deserialize)]
 enum Data {
     MessageType1(DataMessageType1),
+    MessageType2(DataMessageType2),
 }
 
 impl Data {
     fn execute(&self, src: String) -> Result<(), Error> {
         match self {
             Data::MessageType1(data) => data.execute(src),
+            Data::MessageType2(data) => data.execute(src),
+            _ => Err(Error::new(ErrorKind::Unsupported, "Unsupported message type"))
         }
     }
 
@@ -112,7 +121,17 @@ impl Message {
                 let data = self.data.execute(src.clone());
                 Ok(())
             }
-            Err(_) => Err(Error::new(ErrorKind::Other, "Invalid signature")),
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => {
+                    match &self.data {
+                        Data::MessageType1(data) => {
+                            return data.execute(src)
+                        },
+                        _ => Err(e)
+                    }
+                }
+                _ => Err(e)
+            }
         }
     }
 
@@ -121,6 +140,7 @@ impl Message {
         let has_pk = Neighbors::get(&src);
         match has_pk {
             Some(node) => {
+                println!("test: {:?}", node.pk);
                 let pk = node.pk;
                 match signature::verify_signature((
                     self.timestamp.to_string()+&serde_json::to_string(&self.data).unwrap())
@@ -134,7 +154,7 @@ impl Message {
                     }
                 },
             None => {
-                let e = std::io::Error::new(std::io::ErrorKind::Other, "No public key found");
+                let e = std::io::Error::new(std::io::ErrorKind::NotFound, "No public key found");
                 Err(e)
             }
         }

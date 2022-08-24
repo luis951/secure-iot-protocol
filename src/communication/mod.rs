@@ -27,9 +27,18 @@ impl Neighbors {
     }
 
     fn restore() -> Self {
-        let data = keyvalue::get(b"neighbors").unwrap().unwrap();
-        let neighbors: Neighbors = serde_json::from_slice(data.as_slice()).unwrap();
-        neighbors
+        match keyvalue::get(b"neighbors").unwrap() {
+            Some(data) => {
+                let neighbors: Neighbors = serde_json::from_slice(data.as_slice()).unwrap();
+                neighbors
+            },
+            None => {
+                Neighbors::new();
+                let data = keyvalue::get(b"neighbors").unwrap().unwrap();
+                let neighbors: Neighbors = serde_json::from_slice(data.as_slice()).unwrap();
+                neighbors
+            }
+        }
     }
 
     fn add(src: String, node: Node) {

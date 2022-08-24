@@ -20,7 +20,8 @@ bytes = {version = "1.0.1", features = ["serde"]}
 color-eyre = "0.6.2"
 
 # storage module
-rocksdb = "0.18.0"
+# rocksdb = "0.18.0"
+sled = "0.34.7"
 hasher = "0.1"
 cita_trie = { path = "cita-trie" }
 

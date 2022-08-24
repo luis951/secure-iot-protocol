@@ -24,7 +24,7 @@ lazy_static! {
 
             println!("transport args: {:?}", std::env::args().collect::<Vec<_>>());
             let (node, incoming, _contact) = Endpoint::new_peer(
-                SocketAddr::from((Ipv4Addr::LOCALHOST, PORT_NUMBER.parse().unwrap())),
+                SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT_NUMBER.parse().unwrap())),
                 &[],
                 Config {
                     idle_timeout: Duration::from_secs(60 * 60).into(), // 1 hour idle timeout.

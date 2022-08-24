@@ -55,8 +55,15 @@ async fn main() -> Result<()> {
             Box::new(|bytes: &Vec<u8>, src: String| {
             let message:communication::messages::Message = serde_json::from_slice(bytes).unwrap();
             // println!("received {:?}", serde_json::to_string(&message));
-            message.execute(src);
-            Some("200".to_string())
+            match message.execute(src) {
+                Ok(response) => {
+                    Some("200".to_string())
+                }
+                Err(e) => {
+                    println!("Error: {:?}", e);
+                    Some("400".to_string())
+                }
+            }
             })
         )
     );

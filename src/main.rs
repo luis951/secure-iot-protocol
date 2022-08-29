@@ -8,12 +8,13 @@ mod storage;
 mod communication;
 mod validation;
 
-use communication::transactions::Transaction;
+use communication::messages::Packet;
 use lazy_static::lazy_static;
 use storage::keyvalue;
 use storage::merkle;
 use tokio::time::sleep;
 use validation::block::Block;
+use crate::communication::responses::Response;
 
 const DB_PATH: &str = "./storage.db";
 
@@ -60,6 +61,8 @@ async fn main() -> Result<()> {
 
     // println!("{}",communication::messages::Message::generate(1));
 
+    storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
+
     color_eyre::install()?;
 
     if INIT_BLOCKCHAIN.to_owned() == true {
@@ -71,16 +74,29 @@ async fn main() -> Result<()> {
         tokio::spawn(
             transport::listen(
                 Box::new(|bytes: &Vec<u8>, src: String| {
-                let message:communication::messages::Message = serde_json::from_slice(bytes).unwrap();
-                // println!("received {:?}", serde_json::to_string(&message));
-                match message.execute(src) {
-                    Ok(response) => {
-                        Some("200".to_string())
+                    println!("{:?} - {:?}", src, bytes);
+                let request: Packet = serde_json::from_slice(bytes).unwrap();
+
+                let response: Option<Response> = match request {
+                    Packet::Message(msg) => Some(match msg.execute(src) {
+                        Ok(response) => response,
+                        Err(err) => {
+                            println!("Error: {:?}", err);
+                            Response::generate(500).unwrap()
+                        }
+                    }),
+                    Packet::Response(resp) => {
+                        resp.execute(src).unwrap();
+                        None
+                    },
+                };
+
+                match response {
+                    Some(resp) => {
+                        let response_bytes = serde_json::to_string(&resp).unwrap();
+                        Some(response_bytes)
                     }
-                    Err(e) => {
-                        println!("Error: {:?}", e);
-                        Some("400".to_string())
-                    }
+                    None => None,
                 }
                 })
             )

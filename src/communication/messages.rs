@@ -3,12 +3,18 @@ use std::io::{Error, ErrorKind};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::{signature};
+use crate::signature;
 use crate::storage::keyvalue;
 use crate::transport;
 
+use super::responses::Response;
 use super::{Neighbors, Node};
 
+#[derive(Serialize, Deserialize)]
+pub enum Packet {
+    Message(Message),
+    Response(Response),
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Message {
@@ -25,10 +31,11 @@ struct DataMessageType1 {
 }
 
 impl DataMessageType1 {
-    pub fn execute(&self, src: String) -> Result<(), Error> {
+    pub fn execute(&self, src: String) -> Result<Response, Error> {
         //TODO: add bussiness logic (block too many node connections, verify node type)
         Neighbors::add(src, Node{pk: self.public_key, is_validator: false});
-        Ok(())
+
+        Ok(Response::generate(2).unwrap())
     }
 
     pub fn generate() -> Self {
@@ -47,13 +54,13 @@ struct DataMessageType2 {
 }
 
 impl DataMessageType2 {
-    pub fn execute(&self, src: String) -> Result<(), Error> {
+    pub fn execute(&self, src: String) -> Result<Response, Error> {
         //TODO: add bussiness logic (block too many node connections, verify node type)
         // let nodes = self.neighbors.neighbors;
         // for (addr, _) in nodes {
         //     transport::send(node, addr, msg);
         // }
-        Ok(())
+        Ok(Response::generate(1).unwrap())
     }
 
     // pub fn generate() -> Self {
@@ -80,7 +87,7 @@ enum Data {
 }
 
 impl Data {
-    fn execute(&self, src: String) -> Result<(), Error> {
+    fn execute(&self, src: String) -> Result<Response, Error> {
         match self {
             Data::MessageType1(data) => data.execute(src),
             Data::MessageType2(data) => data.execute(src),
@@ -108,18 +115,18 @@ impl Message {
         let signature = signature::new_signature(
             (timestamp.to_string()+&serde_json::to_string(&data).unwrap()).as_bytes(), 
             keyvalue::get(b"secret_key").unwrap().unwrap().as_slice());  
-        serde_json::to_string(&Message {
+        serde_json::to_string(&Packet::Message(Message {
             timestamp,
             data,
             signature
-        }).unwrap()
+        })).unwrap()
     }
 
-    pub fn execute(&self, src: String) -> Result<(), Error> {
+    pub fn execute(&self, src: String) -> Result<Response, Error> {
         match self.verify(src.clone()) {
             Ok(_) => {
                 let data = self.data.execute(src.clone());
-                Ok(())
+                data
             }
             Err(e) => match e.kind() {
                 ErrorKind::NotFound => {

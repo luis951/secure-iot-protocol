@@ -8,6 +8,8 @@ use serde_json::{Map, Value};
 
 use crate::{storage::keyvalue};
 
+use self::messages::Message;
+
 #[derive(Serialize, Deserialize)]
 pub struct Node {
     #[serde(with = "BigArray")]

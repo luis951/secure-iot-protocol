@@ -1,4 +1,6 @@
 pub mod messages;
+pub mod transactions;
+pub mod responses;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -51,8 +53,8 @@ impl Neighbors {
         let neigh_ref = Neighbors::restore();
         match neigh_ref.neighbors.get(src) {
             Some(v) => {
-                // let ret = v.as_str().unwrap().to_string();
-                let ret = Node::deserialize(v).unwrap();
+                println!("{}", v);
+                let ret = serde_json::from_str(&v.to_owned().as_str().unwrap().replace("//", "")).unwrap();
                 Some(ret)
             },
             None => None,

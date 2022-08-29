@@ -140,7 +140,6 @@ impl Message {
         let has_pk = Neighbors::get(&src);
         match has_pk {
             Some(node) => {
-                println!("test: {:?}", node.pk);
                 let pk = node.pk;
                 match signature::verify_signature((
                     self.timestamp.to_string()+&serde_json::to_string(&self.data).unwrap())

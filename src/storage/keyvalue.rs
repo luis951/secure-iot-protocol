@@ -3,18 +3,12 @@
 use std::{sync::{Arc, Mutex}, io::{Error, ErrorKind}};
 
 use lazy_static::lazy_static;
-// use rocksdb;
 use sled;
 
 use crate::DB_PATH;
 
 lazy_static! {
-    // pub static ref DB_CONN: Arc<Mutex<rocksdb::DB>> = {
-    //     let db = rocksdb::DB::open_default(DB_PATH).unwrap();
-    //     Arc::new(Mutex::new(db))
-    // };
-
-    pub static ref DB_CONN: Arc<Mutex<sled::Db>> = {
+    static ref DB_CONN: Arc<Mutex<sled::Db>> = {
         let db = sled::open(DB_PATH).unwrap();
         Arc::new(Mutex::new(db))
     };

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use hasher::Hasher;
+use hasher::{Hasher, HasherKeccak};
 use rlp::{Prototype, Rlp, RlpStream};
 
 use crate::db::{MemoryDB, DB};
@@ -48,7 +48,7 @@ pub trait Trie<D: DB, H: Hasher> {
     ) -> TrieResult<Option<Vec<u8>>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PatriciaTrie<D, H>
 where
     D: DB,
@@ -57,7 +57,7 @@ where
     root: Node,
     root_hash: Vec<u8>,
 
-    db: Arc<D>,
+    pub db: Arc<D>,
     hasher: Arc<H>,
     backup_db: Option<Arc<D>>,
 
@@ -65,6 +65,9 @@ where
     passing_keys: RefCell<HashSet<Vec<u8>>>,
     gen_keys: RefCell<HashSet<Vec<u8>>>,
 }
+
+unsafe impl Sync for PatriciaTrie<MemoryDB, HasherKeccak> {}
+unsafe impl Send for PatriciaTrie<MemoryDB, HasherKeccak> {}
 
 #[derive(Clone, Debug)]
 enum TraceStatus {

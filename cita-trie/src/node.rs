@@ -34,6 +34,9 @@ impl Node {
     }
 }
 
+unsafe impl Send for Node {}
+unsafe impl Sync for Node {}
+
 #[derive(Debug)]
 pub struct LeafNode {
     pub key: Nibbles,

@@ -15,6 +15,7 @@ use storage::merkle;
 use tokio::time::sleep;
 use validation::block::Block;
 use crate::communication::responses::Response;
+use communication::{transactions::Transaction, messages::Message};
 
 const DB_PATH: &str = "./storage.db";
 
@@ -50,7 +51,15 @@ lazy_static!{
     pub static ref INIT_BLOCKCHAIN: bool = {
         let args: Vec<String> = std::env::args().collect();
         match args.iter().position(|arg| arg == "--init") {
-            Some(i) => true,
+            Some(_) => true,
+            None => false,
+        }
+    };
+
+    pub static ref GENERATE_NEW_PAIR: bool = {
+        let args: Vec<String> = std::env::args().collect();
+        match args.iter().position(|arg| arg == "--gen-pair") {
+            Some(_) => true,
             None => false,
         }
     };
@@ -59,59 +68,65 @@ lazy_static!{
 #[tokio::main]
 async fn main() -> Result<()> {
 
-    // println!("{}",communication::messages::Message::generate(1));
-
-    storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
-
     color_eyre::install()?;
+
+    if GENERATE_NEW_PAIR.to_owned(){
+        storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
+    }
+
+    println!("Listening on port {}", PORT_NUMBER.to_owned());
+    tokio::spawn(
+        transport::listen(
+            Box::new(|bytes: &Vec<u8>, src: String| {
+            let request: Packet = serde_json::from_slice(bytes).unwrap();
+            println!("Received from {:?} --> {:?}\n", src, serde_json::to_string(&request).unwrap());
+
+            let response: Option<Response> = match request {
+                Packet::Message(msg) => Some(match msg.execute(src.clone()) {
+                    Ok(response) => {
+                        println!("Sending to {:?} --> {:?}\n", src.clone(), serde_json::to_string(&response).unwrap());
+                        response
+                    },
+                    Err(err) => {
+                        println!("Error: {:?}", err);
+                        Response::generate(500).unwrap()
+                    }
+                }),
+                Packet::Response(resp) => {
+                    resp.execute(src.clone()).unwrap();
+                    None
+                },
+            };
+
+            match response {
+                Some(resp) => {
+                    let response_bytes = serde_json::to_string(&resp).unwrap();
+                    Some(response_bytes)
+                }
+                None => None,
+            }
+            })
+        )
+    );
 
     if INIT_BLOCKCHAIN.to_owned() == true {
 
         println!("Initializing blockchain...");
         create_new_blockchain().await;
     }
-    else {
-        tokio::spawn(
-            transport::listen(
-                Box::new(|bytes: &Vec<u8>, src: String| {
-                    println!("{:?} - {:?}", src, bytes);
-                let request: Packet = serde_json::from_slice(bytes).unwrap();
-
-                let response: Option<Response> = match request {
-                    Packet::Message(msg) => Some(match msg.execute(src) {
-                        Ok(response) => response,
-                        Err(err) => {
-                            println!("Error: {:?}", err);
-                            Response::generate(500).unwrap()
-                        }
-                    }),
-                    Packet::Response(resp) => {
-                        resp.execute(src).unwrap();
-                        None
-                    },
-                };
-
-                match response {
-                    Some(resp) => {
-                        let response_bytes = serde_json::to_string(&resp).unwrap();
-                        Some(response_bytes)
-                    }
-                    None => None,
-                }
-                })
-            )
-        );
+    if PEER_ADDR.to_owned().len() > 0 {
 
         sleep(Duration::from_secs(5)).await;
 
         println!("Sending");
 
-        transport::send(PEER_ADDR.to_string(), 
-        communication::messages::Message::generate(1).to_string()).await.unwrap();
+        let transaction = Transaction::generate_with_vec(2, b"Hello World".to_vec());
 
-        loop {}
+        transport::send(PEER_ADDR.to_string(), 
+        serde_json::to_string(&Packet::Message(Message::generate_with_transaction(3, transaction))).unwrap()).await.unwrap();
 
     }
+    loop {}
 
     // let (sk, pk) = signature::new_pair();
     // let msg = b"hello world";
@@ -153,7 +168,7 @@ async fn main() -> Result<()> {
 async fn create_new_blockchain() {
     storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
     merkle::reset_local_trie().await;
-    let first_transaction = communication::transactions::Transaction::create(6);
+    let first_transaction = Transaction::generate(6);
     // let transaction: Transaction = serde_json::from_str(&first_transaction).unwrap();
     merkle::insert(&first_transaction.signature, 
         serde_json::to_vec(&first_transaction).unwrap().as_slice()).await;

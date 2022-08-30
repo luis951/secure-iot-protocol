@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 use crate::signature;
-use crate::storage::keyvalue;
-use crate::transport;
+use crate::storage::{keyvalue, merkle};
 
 use super::responses::Response;
-use super::{Neighbors, Node};
+use super::neighbors::{Neighbors, Node};
+use super::transactions::Transaction;
 
 #[derive(Serialize, Deserialize)]
 pub enum Packet {
@@ -50,11 +50,10 @@ impl DataMessageType1 {
 
 #[derive(Serialize, Deserialize)]
 struct DataMessageType2 {
-    neighbors: Neighbors
 }
 
 impl DataMessageType2 {
-    pub fn execute(&self, src: String) -> Result<Response, Error> {
+    pub fn execute(&self, _src: String) -> Result<Response, Error> {
         //TODO: add bussiness logic (block too many node connections, verify node type)
         // let nodes = self.neighbors.neighbors;
         // for (addr, _) in nodes {
@@ -75,15 +74,39 @@ impl DataMessageType2 {
 
 #[derive(Serialize, Deserialize)]
 struct DataMessageType3 {
-    // neighbors: Neighbors
+    transaction: Transaction
 }
 
+impl DataMessageType3 {
+    pub fn execute(&self) -> Result<Response, Error> {
+        // TODO: verify more transaction details (address balance)
+        match signature::verify_signature((self.transaction.timestamp.to_string()+
+                                &serde_json::to_string(&self.transaction.data).unwrap()).as_bytes(), 
+            &self.transaction.pk, &self.transaction.signature) {
+            Ok(()) => {
+                merkle::insert(&self.transaction.signature, 
+                    serde_json::to_vec(&self.transaction).unwrap().as_slice());
+                Ok(Response::generate(1).unwrap())
+            }
+            Err(_) => Ok(Response::generate(500).unwrap()),
+        }
+    }
+
+    pub fn generate(transaction: Transaction) -> Self {
+        let data = DataMessageType3 {
+            transaction
+        };
+        data
+    }
+
+}
 
 
 #[derive(Serialize, Deserialize)]
 enum Data {
-    MessageType1(DataMessageType1),
-    MessageType2(DataMessageType2),
+    MessageType1(DataMessageType1), // Send public key for safe communication
+    MessageType2(DataMessageType2), // Request peer neighboring nodes list
+    MessageType3(DataMessageType3), // Propagate transaction to neighbor
 }
 
 impl Data {
@@ -91,6 +114,7 @@ impl Data {
         match self {
             Data::MessageType1(data) => data.execute(src),
             Data::MessageType2(data) => data.execute(src),
+            Data::MessageType3(data) => data.execute(),
             _ => Err(Error::new(ErrorKind::Unsupported, "Unsupported message type"))
         }
     }
@@ -98,13 +122,21 @@ impl Data {
     fn generate(msg_type: u32) -> Self {
         match msg_type {
             1 => Data::MessageType1(DataMessageType1::generate()),
+            // 2 => Data::MessageType2(DataMessageType2::generate()),
+            _ => panic!("Invalid message type"),
+        }
+    }
+
+    fn generate_with_transaction(msg_type: u32, transaction: Transaction) -> Self {
+        match msg_type {
+            3 => Data::MessageType3(DataMessageType3::generate(transaction)),
             _ => panic!("Invalid message type"),
         }
     }
 }
 
 impl Message {
-    pub fn generate(message_type: u32) -> String {
+    pub fn generate(message_type: u32) -> Self {
         let timestamp = chrono::Utc::now().timestamp();
 
         let data: Data = match message_type {
@@ -114,12 +146,30 @@ impl Message {
 
         let signature = signature::new_signature(
             (timestamp.to_string()+&serde_json::to_string(&data).unwrap()).as_bytes(), 
-            keyvalue::get(b"secret_key").unwrap().unwrap().as_slice());  
-        serde_json::to_string(&Packet::Message(Message {
+            keyvalue::get(b"secret_key").unwrap().unwrap().as_slice());
+        Message {
             timestamp,
             data,
             signature
-        })).unwrap()
+        }
+    }
+
+    pub fn generate_with_transaction(message_type: u32, transaction: Transaction) -> Self {
+        let timestamp = chrono::Utc::now().timestamp();
+
+        let data: Data = match message_type {
+            3 => Data::generate_with_transaction(message_type, transaction),
+            _ => panic!("Invalid message type")
+        };
+
+        let signature = signature::new_signature(
+            (timestamp.to_string()+&serde_json::to_string(&data).unwrap()).as_bytes(), 
+            keyvalue::get(b"secret_key").unwrap().unwrap().as_slice());  
+        Message {
+            timestamp,
+            data,
+            signature
+        }
     }
 
     pub fn execute(&self, src: String) -> Result<Response, Error> {

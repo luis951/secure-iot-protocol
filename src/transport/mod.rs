@@ -21,8 +21,6 @@ lazy_static! {
 
     pub static ref QUIC_CONN: AsyncOnce<(Arc<Mutex<Endpoint>>, Arc<Mutex<IncomingConnections>>)> = 
         AsyncOnce::new(async{
-
-            println!("transport args: {:?}", std::env::args().collect::<Vec<_>>());
             let (node, incoming, _contact) = Endpoint::new_peer(
                 SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT_NUMBER.parse().unwrap())),
                 &[],

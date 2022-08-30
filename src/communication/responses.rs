@@ -5,7 +5,7 @@ use serde_big_array::BigArray;
 
 use crate::{storage::keyvalue, signature};
 
-use super::{Neighbors, Node};
+use super::neighbors::{Node, Neighbors};
 
 
 #[derive(Serialize, Deserialize)]

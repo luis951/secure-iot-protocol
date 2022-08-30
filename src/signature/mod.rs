@@ -25,12 +25,12 @@ pub fn new_signature(msg: &[u8], secret_key: &[u8]) -> [u8; 64]{
     secp.sign_ecdsa(&parsed_msg, &sk).serialize_compact()
 }
 
-pub fn verify_signature(msg: &[u8], public_key: &[u8], signaure: &[u8]) -> Result<(), Error>{
+pub fn verify_signature(msg: &[u8], public_key: &[u8], signature: &[u8]) -> Result<(), Error>{
     let secp = Secp256k1::new();
 
     let parsed_msg = Message::from_hashed_data::<sha256::Hash>(msg);
     let pk = PublicKey::from_slice(public_key).expect("32 bytes, within curve order");
-    let sig = Signature::from_compact(signaure).expect("64 bytes");
+    let sig = Signature::from_compact(signature).expect("64 bytes");
     secp.verify_ecdsa(&parsed_msg, &sig, &pk)
 }
 

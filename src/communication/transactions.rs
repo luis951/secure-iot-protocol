@@ -3,7 +3,7 @@ use serde_big_array::BigArray;
 
 use crate::{storage::keyvalue, signature};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Transaction {
     pub timestamp: i64,
     #[serde(with = "BigArray")]
@@ -14,20 +14,20 @@ pub struct Transaction {
     pub signature: [u8; 64],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum TransactionData {
     Type1(DataTransactionType1), // register child address
     Type2(DataTransactionType2), // record data
     Type6(DataTransactionType6), // generate new blockchain federated signing pair
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DataTransactionType1 {
     #[serde(with = "BigArray")]
     child_pk: [u8; 33],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DataTransactionType2 {
     data: Vec<u8>,
 }
@@ -42,7 +42,7 @@ impl DataTransactionType2 {
 
 // must be the first transaction in a block chain
 // pk will be used to validate all subsequent block
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DataTransactionType6 {
     #[serde(with = "BigArray")]
     federated_pk: [u8; 33],

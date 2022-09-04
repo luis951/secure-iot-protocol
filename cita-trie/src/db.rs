@@ -73,10 +73,10 @@ impl MemoryDB {
         args.into()
     }
 
-    pub fn serialize(&self) -> String {
+    pub fn serialize(&self) -> Vec<u8> {
         let storage = self.storage.read().clone();
         let data = MemoryData { data: storage };
-        serde_json::to_string(&data).unwrap()
+        serde_json::to_vec(&data).unwrap()
     }
 }
 
@@ -89,9 +89,9 @@ impl From<bool> for MemoryDB {
     }
 }
 
-impl From<(bool, String)> for MemoryDB {
-    fn from((light, storage): (bool, String)) -> MemoryDB {
-        let data: MemoryData = serde_json::from_str(&storage).unwrap();
+impl From<(bool, Vec<u8>)> for MemoryDB {
+    fn from((light, storage): (bool, Vec<u8>)) -> MemoryDB {
+        let data: MemoryData = serde_json::from_slice(storage.as_slice()).unwrap();
         let storage = data.data;
         MemoryDB {
             light,

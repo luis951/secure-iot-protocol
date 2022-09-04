@@ -15,7 +15,8 @@ use storage::merkle;
 use tokio::time::sleep;
 use validation::block::Block;
 use crate::communication::responses::Response;
-use communication::{transactions::Transaction, messages::Message};
+use communication::{transactions::Transaction, messages::Message, neighbors::Neighbors};
+use validation::block::{LocalBlock};
 
 const DB_PATH: &str = "./storage.db";
 
@@ -76,37 +77,7 @@ async fn main() -> Result<()> {
 
     println!("Listening on port {}", PORT_NUMBER.to_owned());
     tokio::spawn(
-        transport::listen(
-            Box::new(|bytes: &Vec<u8>, src: String| {
-            let request: Packet = serde_json::from_slice(bytes).unwrap();
-            println!("Received from {:?} --> {:?}\n", src, serde_json::to_string(&request).unwrap());
-
-            let response: Option<Response> = match request {
-                Packet::Message(msg) => Some(match msg.execute(src.clone()) {
-                    Ok(response) => {
-                        println!("Sending to {:?} --> {:?}\n", src.clone(), serde_json::to_string(&response).unwrap());
-                        response
-                    },
-                    Err(err) => {
-                        println!("Error: {:?}", err);
-                        Response::generate(500).unwrap()
-                    }
-                }),
-                Packet::Response(resp) => {
-                    resp.execute(src.clone()).unwrap();
-                    None
-                },
-            };
-
-            match response {
-                Some(resp) => {
-                    let response_bytes = serde_json::to_string(&resp).unwrap();
-                    Some(response_bytes)
-                }
-                None => None,
-            }
-            })
-        )
+        transport::listen()
     );
 
     if INIT_BLOCKCHAIN.to_owned() == true {
@@ -120,11 +91,19 @@ async fn main() -> Result<()> {
 
         println!("Sending");
 
-        let transaction = Transaction::generate_with_vec(2, b"Hello World".to_vec());
+        let handshake = Packet::Message(Message::generate(1));
+        transport::send(PEER_ADDR.to_string(), serde_json::to_string(&handshake).unwrap()).await;
 
-        transport::send(PEER_ADDR.to_string(), 
-        serde_json::to_string(&Packet::Message(Message::generate_with_transaction(3, transaction))).unwrap()).await.unwrap();
-
+        for t in 0..10  {
+            println!("Sending transaction {}", t);
+            let transaction = Transaction::generate_with_vec(2, ("Hello World ".to_owned()+&t.to_string()).as_bytes().to_vec());
+            let message = Packet::Message(Message::generate_with_transaction(3, transaction));
+            
+            for (addr, _) in Neighbors::restore().neighbors {
+                println!("Sending to {}", addr);
+                transport::send(addr, serde_json::to_string(&message).unwrap()).await;
+            }
+        }
     }
     loop {}
 
@@ -166,13 +145,12 @@ async fn main() -> Result<()> {
 }
 
 async fn create_new_blockchain() {
-    storage::keyvalue::insert(b"secret_key", &signature::new_pair().0).unwrap();
     merkle::reset_local_trie().await;
     let first_transaction = Transaction::generate(6);
     // let transaction: Transaction = serde_json::from_str(&first_transaction).unwrap();
     merkle::insert(&first_transaction.signature, 
         serde_json::to_vec(&first_transaction).unwrap().as_slice()).await;
-    let initial_block: Block = Block::create_from_loca_trie().await;
-    keyvalue::insert(&initial_block.header, serde_json::to_vec(&initial_block).unwrap().as_slice()).unwrap();
-    keyvalue::insert(b"last_block_header", &initial_block.header).unwrap();
+    let initial_block: Block = Block::create_from_local_trie().await;
+    initial_block.save_to_blockchain();
+    
 }

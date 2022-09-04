@@ -18,6 +18,7 @@ qp2p = "0.28.7"
 tokio = {version = "1", features = ["full"]}
 bytes = {version = "1.0.1", features = ["serde"]}
 color-eyre = "0.6.2"
+async-recursion = "1.0.0"
 
 # storage module
 # rocksdb = "0.18.0"

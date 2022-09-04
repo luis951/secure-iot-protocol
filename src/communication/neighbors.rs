@@ -13,7 +13,7 @@ pub struct Node {
 
 #[derive(Serialize, Deserialize)]
 pub struct Neighbors {
-    neighbors: Map<String, Value>,
+    pub neighbors: Map<String, Value>,
 }
 
 impl Neighbors {
@@ -40,6 +40,7 @@ impl Neighbors {
     }
 
     pub fn add(src: String, node: Node) {
+        println!("add node: {}", src);
         let mut neighbors = Neighbors::restore();
         neighbors.neighbors.insert(src, Value::String(serde_json::to_string(&node).unwrap()));
         keyvalue::insert(b"neighbors", serde_json::to_string(&neighbors).unwrap().as_bytes()).unwrap();

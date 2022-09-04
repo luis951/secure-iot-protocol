@@ -5,6 +5,7 @@ use serde_big_array::BigArray;
 
 use crate::signature;
 use crate::storage::{keyvalue, merkle};
+use crate::validation::block::{self, Block};
 
 use super::responses::Response;
 use super::neighbors::{Neighbors, Node};
@@ -78,17 +79,11 @@ struct DataMessageType3 {
 }
 
 impl DataMessageType3 {
-    pub fn execute(&self) -> Result<Response, Error> {
+    pub async fn execute(&self) -> Result<Response, Error> {
         // TODO: verify more transaction details (address balance)
-        match signature::verify_signature((self.transaction.timestamp.to_string()+
-                                &serde_json::to_string(&self.transaction.data).unwrap()).as_bytes(), 
-            &self.transaction.pk, &self.transaction.signature) {
-            Ok(()) => {
-                merkle::insert(&self.transaction.signature, 
-                    serde_json::to_vec(&self.transaction).unwrap().as_slice());
-                Ok(Response::generate(1).unwrap())
-            }
-            Err(_) => Ok(Response::generate(500).unwrap()),
+        match block::LocalBlock::insert_transaction(self.transaction.clone()).await {
+            Ok(()) => Ok(Response::generate(1).unwrap()),
+            Err(_) => Ok(Response::generate(500).unwrap())
         }
     }
 
@@ -101,20 +96,70 @@ impl DataMessageType3 {
 
 }
 
+#[derive(Serialize, Deserialize)]
+struct DataMessageType4 {
+    block: Block
+}
+
+impl DataMessageType4 {
+    pub async fn execute(&self) -> Result<Response, Error> {
+        // TODO: verify block details (transactions missing or added)
+
+        keyvalue::insert(&self.block.header, serde_json::to_vec(&self.block).unwrap().as_slice()).unwrap();
+        keyvalue::insert(b"last_block_header", &self.block.header).unwrap();
+        Ok(Response::generate(1).unwrap())
+    }
+
+    pub fn generate(block: Block) -> Self {
+        let data = DataMessageType4 {
+            block
+        };
+        data
+    }
+
+}
+
+#[derive(Serialize, Deserialize)]
+struct DataMessageType5 {
+}
+
+impl DataMessageType5 {
+    pub fn execute(&self) -> Result<Response, Error> {
+        let mut blocks: Vec<Block> = Vec::new();
+
+        let mut header = keyvalue::get(b"last_block_header").unwrap().unwrap();
+        let mut block_serialized = keyvalue::get(&header).unwrap().unwrap();
+        let mut block: Block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
+        blocks.push(block.clone());
+        while block.previous_block_header.len() > 0 {
+            header = block.previous_block_header.clone();
+            block_serialized = keyvalue::get(&header).unwrap().unwrap();
+            block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
+            blocks.push(block.clone());
+        }
+        let response = Response::generate_with_block_vector(3, blocks).unwrap();
+        Ok(response)
+    }
+}
+
 
 #[derive(Serialize, Deserialize)]
 enum Data {
     MessageType1(DataMessageType1), // Send public key for safe communication
     MessageType2(DataMessageType2), // Request peer neighboring nodes list
     MessageType3(DataMessageType3), // Propagate transaction to neighbor
+    MessageType4(DataMessageType4), // Propagate new block to neighbor
+    MessageType5(DataMessageType5), // Request current blockchain state
 }
 
 impl Data {
-    fn execute(&self, src: String) -> Result<Response, Error> {
+    async fn execute(&self, src: String) -> Result<Response, Error> {
         match self {
             Data::MessageType1(data) => data.execute(src),
             Data::MessageType2(data) => data.execute(src),
-            Data::MessageType3(data) => data.execute(),
+            Data::MessageType3(data) => data.execute().await,
+            Data::MessageType4(data) => data.execute().await,
+            Data::MessageType5(data) => data.execute(),
             _ => Err(Error::new(ErrorKind::Unsupported, "Unsupported message type"))
         }
     }
@@ -130,6 +175,13 @@ impl Data {
     fn generate_with_transaction(msg_type: u32, transaction: Transaction) -> Self {
         match msg_type {
             3 => Data::MessageType3(DataMessageType3::generate(transaction)),
+            _ => panic!("Invalid message type"),
+        }
+    }
+
+    fn generate_with_block(msg_type: u32, block: Block) -> Self {
+        match msg_type {
+            4 => Data::MessageType4(DataMessageType4::generate(block)),
             _ => panic!("Invalid message type"),
         }
     }
@@ -172,10 +224,28 @@ impl Message {
         }
     }
 
-    pub fn execute(&self, src: String) -> Result<Response, Error> {
+    pub async fn generate_with_block(message_type: u32, block: Block) -> Self {
+        let timestamp = chrono::Utc::now().timestamp();
+
+        let data: Data = match message_type {
+            4 => Data::generate_with_block(message_type, block),
+            _ => panic!("Invalid message type")
+        };
+
+        let signature = signature::new_signature(
+            (timestamp.to_string()+&serde_json::to_string(&data).unwrap()).as_bytes(), 
+            keyvalue::get(b"secret_key").unwrap().unwrap().as_slice());  
+        Message {
+            timestamp,
+            data,
+            signature
+        }
+    }
+
+    pub async fn execute(&self, src: String) -> Result<Response, Error> {
         match self.verify(src.clone()) {
             Ok(_) => {
-                let data = self.data.execute(src.clone());
+                let data = self.data.execute(src.clone()).await;
                 data
             }
             Err(e) => match e.kind() {
@@ -183,6 +253,15 @@ impl Message {
                     match &self.data {
                         Data::MessageType1(data) => {
                             return data.execute(src)
+                        },
+                        Data::MessageType2(data) => {
+                            return data.execute(src)
+                        },
+                        Data::MessageType3(data) => {
+                            return data.execute().await
+                        },
+                        Data::MessageType4(data) => {
+                            return data.execute().await
                         },
                         _ => Err(e)
                     }

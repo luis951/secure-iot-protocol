@@ -12,7 +12,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::PORT_NUMBER;
+use crate::{PORT_NUMBER, communication::{messages::{Packet, Message}, responses::Response}};
 
 
 
@@ -38,7 +38,7 @@ lazy_static! {
     });
 }
 
-pub async fn listen(mut callback: Box<dyn FnMut(&Vec<u8>, String)-> Option<String> + Send>) -> Result<()> {
+pub async fn listen() -> Result<()> {
     
     // loop over incoming connections
     while let Some((connection, mut incoming_messages)) = 
@@ -48,7 +48,7 @@ pub async fn listen(mut callback: Box<dyn FnMut(&Vec<u8>, String)-> Option<Strin
         // loop over incoming messages
         while let Some(bytes) = incoming_messages.next().await? {
             match callback(&bytes.to_vec(), 
-            src.to_string()) {
+            src.to_string()).await {
                 Some(response) => {
                     connection.send(Bytes::from(response)).await?;
                 }
@@ -76,8 +76,43 @@ pub async fn send(addr: String, msg: String) -> Result<()> {
         // And causes the receiver side a sending error when reply via the in-coming connection.
         // Hence here have to listen for the reply to avoid such error
         let reply = incoming.next().await?.unwrap();
+        callback(&reply.to_vec(), peer.to_string()).await;
         println!("Received from {:?} --> {:?}", peer, reply);
 
     println!("Done sending");
     Ok(())
+}
+
+pub async fn callback(bytes: &Vec<u8>, src: String) -> Option<String> {
+
+    println!("Received from {:?} --> {:?}\n", src, std::str::from_utf8(bytes).unwrap());
+    let request: Packet = serde_json::from_slice(bytes).unwrap();
+
+            let response: Option<Packet>;
+            match request {
+                Packet::Message(msg) => {
+                    response = Some(match msg.execute(src.clone()).await {
+                        Ok(response) => {
+                            println!("Sending to {:?} --> {:?}\n", src.clone(), serde_json::to_string(&response).unwrap());
+                            Packet::Response(response)
+                        },
+                        Err(err) => {
+                            println!("Error: {:?}", err);
+                            Packet::Response(Response::generate(500).unwrap())
+                        }});
+                },
+                Packet::Response(res) => {
+                    println!("Response received");
+                    res.execute(src.clone()).unwrap();
+                    response = None
+                }
+            } 
+
+            match response {
+                Some(resp) => {
+                    let response_bytes = serde_json::to_string(&resp).unwrap();
+                    Some(response_bytes)
+                }
+                None => None,
+            }
 }

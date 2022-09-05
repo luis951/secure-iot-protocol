@@ -65,6 +65,14 @@ lazy_static!{
             None => false,
         }
     };
+
+    pub static ref EXECUTE_TESTS: bool = {
+        let args: Vec<String> = std::env::args().collect();
+        match args.iter().position(|arg| arg == "--test") {
+            Some(_) => true,
+            None => false,
+        }
+    };
 }
 
 #[tokio::main]
@@ -80,6 +88,11 @@ async fn main() -> Result<()> {
     tokio::spawn(
         transport::listen()
     );
+
+    if EXECUTE_TESTS.to_owned() == true {
+        testing::transport_tests().await;
+        return Ok(());
+    }
 
     if INIT_BLOCKCHAIN.to_owned() == true {
 

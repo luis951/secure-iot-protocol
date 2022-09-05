@@ -19,7 +19,7 @@ pub struct Block {
     pub header: Vec<u8>,
     #[serde(with = "BigArray")]
     issuer: [u8; 33],
-    body: Vec<u8>,
+    pub body: Vec<u8>,
     timestamp: i64,
     pub previous_block_header: Vec<u8>,
     #[serde(with = "BigArray")]
@@ -97,7 +97,6 @@ impl Block {
         }
     }
 
-    #[async_recursion]
     pub async fn send_block(self, peer: Option<String>) {
         let packet = Packet::Message(Message::generate_with_block(4, self).await);
         let serialized_packet = serde_json::to_string(&packet).unwrap();

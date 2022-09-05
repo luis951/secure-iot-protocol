@@ -105,8 +105,11 @@ impl DataMessageType4 {
     pub async fn execute(&self) -> Result<Response, Error> {
         // TODO: verify block details (transactions missing or added)
 
-        keyvalue::insert(&self.block.header, serde_json::to_vec(&self.block).unwrap().as_slice()).unwrap();
-        keyvalue::insert(b"last_block_header", &self.block.header).unwrap();
+        merkle::create_evaluation_trie(self.block.clone().body, self.block.clone().header);
+        self.block.save_to_blockchain();
+
+        // keyvalue::insert(&self.block.header, serde_json::to_vec(&self.block).unwrap().as_slice()).unwrap();
+        // keyvalue::insert(b"last_block_header", &self.block.header).unwrap();
         Ok(Response::generate(1).unwrap())
     }
 
@@ -121,9 +124,22 @@ impl DataMessageType4 {
 
 #[derive(Serialize, Deserialize)]
 struct DataMessageType5 {
+    until_header: Vec<u8>
 }
 
 impl DataMessageType5 {
+
+    pub fn generate() -> Self {
+        let until_header = match keyvalue::get(b"last_block_header").unwrap() {
+            Some(header) => header,
+            None => vec![]
+        };
+        let data = DataMessageType5 {
+            until_header
+        };
+        data
+    }
+
     pub fn execute(&self) -> Result<Response, Error> {
         let mut blocks: Vec<Block> = Vec::new();
 
@@ -135,6 +151,11 @@ impl DataMessageType5 {
             header = block.previous_block_header.clone();
             block_serialized = keyvalue::get(&header).unwrap().unwrap();
             block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
+            
+            if block.header == self.until_header {
+                break;
+            }
+
             blocks.push(block.clone());
         }
         let response = Response::generate_with_block_vector(3, blocks).unwrap();
@@ -168,6 +189,7 @@ impl Data {
         match msg_type {
             1 => Data::MessageType1(DataMessageType1::generate()),
             // 2 => Data::MessageType2(DataMessageType2::generate()),
+            5 => Data::MessageType5(DataMessageType5::generate()),
             _ => panic!("Invalid message type"),
         }
     }
@@ -193,6 +215,7 @@ impl Message {
 
         let data: Data = match message_type {
             1 => Data::generate(message_type),
+            5 => Data::generate(message_type),
             _ => panic!("Invalid message type")
         };
 
@@ -245,6 +268,7 @@ impl Message {
     pub async fn execute(&self, src: String) -> Result<Response, Error> {
         match self.verify(src.clone()) {
             Ok(_) => {
+                println!("Verified message from {}", src);
                 let data = self.data.execute(src.clone()).await;
                 data
             }
@@ -254,19 +278,13 @@ impl Message {
                         Data::MessageType1(data) => {
                             return data.execute(src)
                         },
-                        Data::MessageType2(data) => {
-                            return data.execute(src)
-                        },
-                        Data::MessageType3(data) => {
-                            return data.execute().await
-                        },
-                        Data::MessageType4(data) => {
-                            return data.execute().await
-                        },
                         _ => Err(e)
                     }
                 }
-                _ => Err(e)
+                _ => {
+                    println!("{}", e);
+                    Err(e)
+                }
             }
         }
     }

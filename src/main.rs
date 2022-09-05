@@ -7,6 +7,7 @@ mod signature;
 mod storage;
 mod communication;
 mod validation;
+mod testing;
 
 use communication::messages::Packet;
 use lazy_static::lazy_static;
@@ -87,25 +88,77 @@ async fn main() -> Result<()> {
     }
     if PEER_ADDR.to_owned().len() > 0 {
 
-        sleep(Duration::from_secs(5)).await;
+        // println!("Sending");
 
-        println!("Sending");
+        // let handshake = Packet::Message(Message::generate(1));
+        // transport::send(PEER_ADDR.to_string(), serde_json::to_string(&handshake).unwrap()).await;
 
-        let handshake = Packet::Message(Message::generate(1));
-        transport::send(PEER_ADDR.to_string(), serde_json::to_string(&handshake).unwrap()).await;
+        // match transport::send(PEER_ADDR.clone(), 
+        //     serde_json::to_string(&Packet::Message(
+        //         Message::generate(5)
+        //     )).unwrap()
+        // ).await {
+        //     Ok(_) => {
+        //         println!("message type 5 sent");},
+        //     Err(e) => {
+        //         println!("error sending message: {}", e);
+        //     },
+        // }
 
-        for t in 0..10  {
-            println!("Sending transaction {}", t);
-            let transaction = Transaction::generate_with_vec(2, ("Hello World ".to_owned()+&t.to_string()).as_bytes().to_vec());
-            let message = Packet::Message(Message::generate_with_transaction(3, transaction));
+        // for t in 0..10  {
+        //     println!("Sending transaction {}", t);
+        //     let transaction = Transaction::generate_with_vec(2, ("Hello World ".to_owned()+&t.to_string()).as_bytes().to_vec());
+        //     LocalBlock::insert_transaction(transaction.clone()).await;
+        //     let message = Packet::Message(Message::generate_with_transaction(3, transaction.clone()));
             
-            for (addr, _) in Neighbors::restore().neighbors {
-                println!("Sending to {}", addr);
-                transport::send(addr, serde_json::to_string(&message).unwrap()).await;
-            }
+        //     for (addr, _) in Neighbors::restore().neighbors {
+        //         println!("Sending to {}", addr);
+        //         transport::send(addr, serde_json::to_string(&message).unwrap()).await;
+        //     }
+        // }
+    }
+    loop {
+        println!("Menu:");
+        println!("1. Send connection message");
+        println!("2. Send transaction");
+        println!("3. Request blockchain state");
+
+        let mut unformatted_input = String::new();
+        std::io::stdin().read_line(&mut unformatted_input).unwrap();
+        let input: u8;
+        match unformatted_input.trim().parse() {
+            Ok(num) => input = num,
+            Err(_) => {
+                println!("Invalid input");
+                continue
+            },
+        }
+        match input {
+            1 => {
+                let message = Packet::Message(Message::generate(1));
+                transport::send(PEER_ADDR.to_string(), serde_json::to_string(&message).unwrap()).await;
+            },
+            2 => {
+                println!("Enter transaction:");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap();
+                let transaction = Transaction::generate_with_vec(2, (input).as_bytes().to_vec());
+                LocalBlock::insert_transaction(transaction.clone()).await;
+                let message = Packet::Message(Message::generate_with_transaction(3, transaction.clone()));
+                for (addr, _) in Neighbors::restore().neighbors {
+                    println!("Sending to {}", addr);
+                    transport::send(addr, serde_json::to_string(&message).unwrap()).await;
+                }
+            },
+            3 => {
+                let message = Packet::Message(Message::generate(5));
+                transport::send(PEER_ADDR.to_string(), serde_json::to_string(&message).unwrap()).await;
+            },
+            _ => {
+                println!("Invalid input");
+            },
         }
     }
-    loop {}
 
     // let (sk, pk) = signature::new_pair();
     // let msg = b"hello world";

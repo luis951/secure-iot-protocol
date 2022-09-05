@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 
 use async_once::AsyncOnce;
+use async_recursion::async_recursion;
 use color_eyre::eyre::Result;
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -12,7 +13,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::{PORT_NUMBER, communication::{messages::{Packet, Message}, responses::Response}};
+use crate::{PORT_NUMBER, communication::{messages::{Packet}, responses::Response}};
 
 
 
@@ -83,6 +84,7 @@ pub async fn send(addr: String, msg: String) -> Result<()> {
     Ok(())
 }
 
+#[async_recursion]
 pub async fn callback(bytes: &Vec<u8>, src: String) -> Option<String> {
 
     println!("Received from {:?} --> {:?}\n", src, std::str::from_utf8(bytes).unwrap());
@@ -103,7 +105,7 @@ pub async fn callback(bytes: &Vec<u8>, src: String) -> Option<String> {
                 },
                 Packet::Response(res) => {
                     println!("Response received");
-                    res.execute(src.clone()).unwrap();
+                    res.execute(src.clone()).await.unwrap();
                     response = None
                 }
             } 

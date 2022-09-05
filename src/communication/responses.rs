@@ -3,7 +3,7 @@ use std::io::Error;
 use serde::{Serialize, Deserialize};
 use serde_big_array::BigArray;
 
-use crate::{storage::keyvalue, signature, validation::block::Block};
+use crate::{storage::keyvalue, signature, validation::block::Block, transport, communication::messages::{Packet, Message}};
 
 use super::neighbors::{Node, Neighbors};
 
@@ -15,13 +15,13 @@ struct Type2Data {
 }
 
 impl Type2Data {
-    fn execute(&self, src: String) -> Result<(), Error> {
-        println!("add node: {}", src);
+    async fn execute(&self, src: String) -> Result<(), Error> {
         let new_node = Node {
             pk: self.pk,
             is_validator: true, // TODO: add check after blockchain is received
         };
-        Neighbors::add(src, new_node);
+        Neighbors::add(src.clone(), new_node);
+        println!("GERANDO ESSA MERDA!!!");
         Ok(())
     }
 
@@ -65,11 +65,10 @@ enum Data {
 }
 
 impl Data {
-    fn execute(&self, src: String) -> Result<(), Error> {
-        print!("execute response");
+    async fn execute(&self, src: String) -> Result<(), Error> {
         match self {
             Data::ResponseType1 => Ok(()),
-            Data::ResponseType2(data) => data.execute(src),
+            Data::ResponseType2(data) => data.execute(src).await,
             Data::ResponseType3(data) => data.execute(src),
             Data::ErrorResponse => Ok(()),
         }
@@ -101,8 +100,8 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn execute(&self, src: String) -> Result<(), Error> {
-        self.data.execute(src)
+    pub async fn execute(&self, src: String) -> Result<(), Error> {
+        self.data.execute(src).await
     }
 
     pub fn generate(data_type: u32) -> Result<Self, Error> {
@@ -125,7 +124,7 @@ impl Response {
     }
 
     pub fn generate_with_block_vector(data_type: u32, blocks: Vec<Block>) -> Result<Self, Error> {
-        match Data::generate(data_type) {
+        match Data::generate_with_block_vector(data_type, blocks) {
             Ok(data) => {
                 let timestamp = chrono::Utc::now().timestamp();
 

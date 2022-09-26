@@ -105,7 +105,6 @@ impl DataMessageType4 {
     pub async fn execute(&self) -> Result<Response, Error> {
         // TODO: verify block details (transactions missing or added)
 
-        merkle::create_evaluation_trie(self.block.clone().body, self.block.clone().header);
         self.block.save_to_blockchain();
 
         // keyvalue::insert(&self.block.header, serde_json::to_vec(&self.block).unwrap().as_slice()).unwrap();

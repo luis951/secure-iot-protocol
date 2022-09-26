@@ -252,6 +252,18 @@ where
             None => Err(TrieError::InvalidStateRoot),
         }
     }
+    
+    /// Checks that the key is present in the trie
+    pub fn contains(&self, key: &[u8]) -> TrieResult<bool> {
+        Ok(self
+            .get_at(self.root.clone(), &Nibbles::from_raw(key.to_vec(), true))?
+            .map_or(false, |_| true))
+    }
+    
+    /// Returns the value for key stored in the trie.
+    pub fn get(&self, key: &[u8]) -> TrieResult<Option<Vec<u8>>> {
+        self.get_at(self.root.clone(), &Nibbles::from_raw(key.to_vec(), true))
+    }
 
     // extract specified height statedb in full node mode
     pub fn extract_backup(

@@ -91,6 +91,8 @@ async fn main() -> Result<()> {
 
     if EXECUTE_TESTS.to_owned() == true {
         testing::transport_tests().await;
+        testing::signature_tests();
+        testing::storage_tests();
         return Ok(());
     }
 
@@ -132,9 +134,10 @@ async fn main() -> Result<()> {
     }
     loop {
         println!("Menu:");
-        println!("1. Send connection message");
-        println!("2. Send transaction");
-        println!("3. Request blockchain state");
+        println!("1. Enviar mensagem de conexão");
+        println!("2. Enviar transação");
+        println!("3. Solicitar estado atual da blockchain");
+        println!("4. Buscar transação pelo cabeçalho");
 
         let mut unformatted_input = String::new();
         std::io::stdin().read_line(&mut unformatted_input).unwrap();
@@ -142,7 +145,7 @@ async fn main() -> Result<()> {
         match unformatted_input.trim().parse() {
             Ok(num) => input = num,
             Err(_) => {
-                println!("Invalid input");
+                println!("Opção inválida");
                 continue
             },
         }
@@ -152,14 +155,14 @@ async fn main() -> Result<()> {
                 transport::send(PEER_ADDR.to_string(), serde_json::to_string(&message).unwrap()).await;
             },
             2 => {
-                println!("Enter transaction:");
+                println!("Insira dados de transação:");
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input).unwrap();
                 let transaction = Transaction::generate_with_vec(2, (input).as_bytes().to_vec());
                 LocalBlock::insert_transaction(transaction.clone()).await;
                 let message = Packet::Message(Message::generate_with_transaction(3, transaction.clone()));
                 for (addr, _) in Neighbors::restore().neighbors {
-                    println!("Sending to {}", addr);
+                    println!("Enviando para {}", addr);
                     transport::send(addr, serde_json::to_string(&message).unwrap()).await;
                 }
             },
@@ -167,8 +170,17 @@ async fn main() -> Result<()> {
                 let message = Packet::Message(Message::generate(5));
                 transport::send(PEER_ADDR.to_string(), serde_json::to_string(&message).unwrap()).await;
             },
+            4 => {
+                println!("Insira cabeçalho de transação:");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap();
+                input = input.trim().to_string();
+                let header = hex::decode(input).unwrap();
+                let transaction = Block::search_transaction_in_blockchain(header.as_slice());
+                println!("Transação: {:?}", serde_json::to_string(&transaction));
+            },
             _ => {
-                println!("Invalid input");
+                println!("Cabeçalho inválido");
             },
         }
     }

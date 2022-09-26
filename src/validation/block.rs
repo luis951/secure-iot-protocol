@@ -5,7 +5,7 @@ use lazy_static::__Deref;
 use serde::{Serialize, Deserialize};
 use serde_big_array::BigArray;
 
-use crate::{storage::{merkle, self, keyvalue}, signature, communication::{transactions::Transaction, neighbors::{self, Node, Neighbors}, messages::{Packet, Message}}, transport};
+use crate::{storage::{merkle, self, keyvalue}, signature, communication::{transactions::Transaction, neighbors::{self, Node, Neighbors}, messages::{Packet, Message}}, transport, INIT_BLOCKCHAIN};
 
 #[derive(Serialize, Deserialize, Clone)]
 enum FederationSignature {
@@ -97,6 +97,26 @@ impl Block {
         }
     }
 
+    pub fn search_transaction_in_blockchain(signature: &[u8]) -> Option<Transaction> {
+
+        let mut header = keyvalue::get(b"last_block_header").unwrap().unwrap();
+        let mut block_serialized = keyvalue::get(&header).unwrap().unwrap();
+        let mut block: Block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
+        let trie = merkle::create_evaluation_trie(block.body, block.header);
+        
+        while block.previous_block_header.len() > 0 || !trie.contains(signature).unwrap() {
+            header = block.previous_block_header.clone();
+            let mut block_serialized = keyvalue::get(&header).unwrap().unwrap();
+            let mut block: Block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
+            let trie = merkle::create_evaluation_trie(block.body, block.header);
+        }
+        if trie.contains(&signature).unwrap() {
+            Some(serde_json::from_slice(trie.get(signature).unwrap().unwrap().as_slice()).unwrap())
+        } else {
+            None
+        }
+    }
+
     pub async fn send_block(self, peer: Option<String>) {
         let packet = Packet::Message(Message::generate_with_block(4, self).await);
         let serialized_packet = serde_json::to_string(&packet).unwrap();
@@ -129,9 +149,11 @@ impl LocalBlock {
                     *t_n += 1;
                     if *t_n == 10 {
                         println!("SENDING BLOCK AND RESETTING");
-                        let block = Block::create_from_local_trie().await;
-                        block.clone().save_to_blockchain();
-                        block.clone().send_block(None).await;
+                        if INIT_BLOCKCHAIN.to_owned() {
+                            let block = Block::create_from_local_trie().await;
+                            block.clone().save_to_blockchain();
+                            block.clone().send_block(None).await;
+                        }
                     }
                     Ok(())
                 },

@@ -21,7 +21,6 @@ impl Type2Data {
             is_validator: true, // TODO: add check after blockchain is received
         };
         Neighbors::add(src.clone(), new_node);
-        println!("GERANDO ESSA MERDA!!!");
         Ok(())
     }
 

@@ -69,7 +69,7 @@ pub async fn send(addr: String, msg: String) -> Result<()> {
             .parse()
             .expect("Invalid SocketAddr.  Use the form 127.0.0.1:1234");
         let msg = Bytes::from(msg);
-        println!("Sending to {:?} --> {:?}\n", peer, msg);
+        println!("Enviando para {:?} --> {:?}\n", peer, msg);
         let (conn, mut incoming) = QUIC_CONN.get().await.0.lock().await.connect_to(&peer).await?;
         conn.send(msg.clone()).await?;
         // `Endpoint` no longer having `connection_pool` to hold established connection.
@@ -78,16 +78,15 @@ pub async fn send(addr: String, msg: String) -> Result<()> {
         // Hence here have to listen for the reply to avoid such error
         let reply = incoming.next().await?.unwrap();
         callback(&reply.to_vec(), peer.to_string()).await;
-        println!("Received from {:?} --> {:?}", peer, reply);
 
-    println!("Done sending");
+    println!("Envio finalizado");
     Ok(())
 }
 
 #[async_recursion]
 pub async fn callback(bytes: &Vec<u8>, src: String) -> Option<String> {
 
-    println!("Received from {:?} --> {:?}\n", src, std::str::from_utf8(bytes).unwrap());
+    println!("Recebido de {:?} --> {:?}\n", src, std::str::from_utf8(bytes).unwrap());
     let request: Packet = serde_json::from_slice(bytes).unwrap();
 
             let response: Option<Packet>;
@@ -95,16 +94,15 @@ pub async fn callback(bytes: &Vec<u8>, src: String) -> Option<String> {
                 Packet::Message(msg) => {
                     response = Some(match msg.execute(src.clone()).await {
                         Ok(response) => {
-                            println!("Sending to {:?} --> {:?}\n", src.clone(), serde_json::to_string(&response).unwrap());
+                            println!("Enviando resposta para {:?} --> {:?}\n", src.clone(), serde_json::to_string(&response).unwrap());
                             Packet::Response(response)
                         },
                         Err(err) => {
-                            println!("Error: {:?}", err);
+                            println!("Erro: {:?}", err);
                             Packet::Response(Response::generate(500).unwrap())
                         }});
                 },
                 Packet::Response(res) => {
-                    println!("Response received");
                     res.execute(src.clone()).await.unwrap();
                     response = None
                 }

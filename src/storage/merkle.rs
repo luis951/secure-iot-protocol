@@ -72,3 +72,8 @@ pub async fn get(key: Vec<u8>) -> Option<Vec<u8>> {
     let trie = LOCAL_BLOCK.read().await;
     trie.get(key.as_slice()).unwrap()
 }
+
+pub async fn get_all() -> Vec<(Vec<u8>, Vec<u8>)> {
+    let trie = LOCAL_BLOCK.read().await;
+    trie.iter().collect()
+}

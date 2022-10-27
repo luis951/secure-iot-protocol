@@ -16,7 +16,7 @@ use storage::merkle;
 use tokio::time::sleep;
 use validation::block::Block;
 use crate::communication::responses::Response;
-use communication::{transactions::Transaction, messages::Message, neighbors::Neighbors};
+use communication::{transactions::Transaction, transactions::TransactionData, messages::Message, neighbors::Neighbors};
 use validation::block::{LocalBlock};
 
 const DB_PATH: &str = "./storage.db";
@@ -177,7 +177,28 @@ async fn main() -> Result<()> {
                 input = input.trim().to_string();
                 let header = hex::decode(input).unwrap();
                 let transaction = Block::search_transaction_in_blockchain(header.as_slice());
-                println!("Transação: {:?}", serde_json::to_string(&transaction));
+                match transaction {
+                    Some(t) => {
+                        println!("Transação:");
+                        println!("Timestamp: {:?}", t.timestamp);
+                        match t.data {
+                            TransactionData::Type2(t_data) => {
+                                println!("Tipo da Transação: 2");
+                                println!("Data: {:?}", String::from_utf8(t_data.data));
+                            },
+                            TransactionData::Type6(_) => {
+                                println!("Transação Tipo: 6");
+                                println!("Contém chave pública de assinatura federada");
+                            },
+                            _ => {
+                                println!("Transação Tipo: outro");
+                            },
+                        }
+                    },
+                    None => {
+                        println!("Transação não encontrada");
+                    },
+                }
             },
             _ => {
                 println!("Cabeçalho inválido");

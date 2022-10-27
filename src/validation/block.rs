@@ -4,8 +4,10 @@ use async_recursion::async_recursion;
 use lazy_static::__Deref;
 use serde::{Serialize, Deserialize};
 use serde_big_array::BigArray;
+use serde_json::Value;
+use super::address::{Address, AddressesState};
 
-use crate::{storage::{merkle, self, keyvalue}, signature, communication::{transactions::Transaction, neighbors::{self, Node, Neighbors}, messages::{Packet, Message}}, transport, INIT_BLOCKCHAIN};
+use crate::{storage::{merkle, self, keyvalue}, signature, communication::{transactions::{Transaction, DataTransactionType7, TransactionData}, neighbors::{self, Node, Neighbors}, messages::{Packet, Message}}, transport, INIT_BLOCKCHAIN};
 
 #[derive(Serialize, Deserialize, Clone)]
 enum FederationSignature {
@@ -19,6 +21,7 @@ pub struct Block {
     pub header: Vec<u8>,
     #[serde(with = "BigArray")]
     issuer: [u8; 33],
+    pub addresses_state: AddressesState,
     pub body: Vec<u8>,
     timestamp: i64,
     pub previous_block_header: Vec<u8>,
@@ -38,6 +41,69 @@ impl Block {
             None => vec![],
         };
         
+        let addresses_state = {
+        
+            let mut previous_state = match previous_block_header.len(){
+                0 => {AddressesState::new()},
+                _ => {
+                    let previous_block: Block = serde_json::from_slice(previous_block_header.clone().as_slice()).unwrap();
+                    let previous_state = previous_block.addresses_state;
+                    previous_state
+                }
+            };
+
+            let all_transactions = merkle::get_all().await;
+            for t in all_transactions {
+                let transaction: Transaction = serde_json::from_slice(t.1.as_slice()).unwrap();
+                let last_transaction = transaction.signature;
+                let mut balance: i64 = 0;
+                let mut linked_addresses = vec![];
+                if previous_state.state.contains_key(&hex::encode(transaction.pk)) {
+
+                    match transaction.data {
+                        TransactionData::Type7(data) => {
+                            let sent_address_pk = data.recipient_pk;
+                            let mut sent_address_current_balance = 0;
+                            let mut sent_address_linked_addresses = vec![];
+                            let mut sent_address_last_transaction: [u8; 64] = [0; 64];
+                            if previous_state.state.contains_key(&hex::encode(sent_address_pk)) {
+                                let found_address:Address = serde_json::from_str(previous_state.state.get(&hex::encode(sent_address_pk)).unwrap().as_str().unwrap()).unwrap();
+                                sent_address_last_transaction = found_address.last_transaction;
+                                sent_address_linked_addresses = found_address.linked_addresses;
+                                sent_address_current_balance = found_address.balance;
+                                
+                            }
+                            let sent_address = Address{
+                                last_transaction: sent_address_last_transaction,
+                                balance: sent_address_current_balance + data.balance_variation,
+                                linked_addresses: sent_address_linked_addresses,
+                            };
+                            previous_state.state.insert(hex::encode(sent_address_pk), Value::String(serde_json::to_string(&sent_address).unwrap()));
+                        },
+                        _ => {}
+                    }
+
+                    let value = previous_state.state.get(&hex::encode(transaction.pk)).unwrap()
+                    .to_owned().as_str().unwrap().replace("//", "");
+                    let found_address:Address = serde_json::from_str(&value).unwrap();
+                    balance = found_address.balance;
+                    linked_addresses = found_address.linked_addresses;
+                }
+
+                balance += transaction.balance_variation;
+
+                let new_address_data:Address = Address{
+                    balance,
+                    linked_addresses,
+                    last_transaction,
+                };
+                
+                previous_state.state.insert(hex::encode(transaction.pk), 
+                    Value::String(serde_json::to_string(&new_address_data).unwrap()));
+            }
+
+            previous_state
+        };
 
         let issuer_signature = signature::new_signature(
             (timestamp.to_string()+&serde_json::to_string(&header).unwrap()).as_bytes(), 
@@ -55,6 +121,7 @@ impl Block {
         Block {
             header,
             issuer,
+            addresses_state,
             body,
             timestamp,
             previous_block_header,
@@ -64,7 +131,8 @@ impl Block {
     }
 
     pub fn save_to_blockchain(&self){
-        keyvalue::insert(&self.header, serde_json::to_vec(&self).unwrap().as_slice()).unwrap();
+        let value = serde_json::to_vec(&self).unwrap();
+        keyvalue::insert(self.header.as_slice(), value.as_slice()).unwrap();
         keyvalue::insert(b"last_block_header", &self.header).unwrap();
         Block::print_blockchain();
     }
@@ -75,6 +143,11 @@ impl Block {
         println!("ISSUER: {:?}", self.issuer);
         println!("TIMESTAMP: {:?}", self.timestamp);
         println!("PREVIOUS BLOCK HEADER: {:?}", self.previous_block_header);
+        println!("ADDRESSES STATE:");
+        for (key, value) in self.addresses_state.state.iter() {
+            println!("{}: {}", key, value);
+        }
+
         println!("BODY: ");
         for (key, value) in trie.iter() {
             let t: Transaction = serde_json::from_slice(&value.as_slice()).unwrap();
@@ -104,7 +177,7 @@ impl Block {
         let mut block: Block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();
         let trie = merkle::create_evaluation_trie(block.body, block.header);
         
-        while block.previous_block_header.len() > 0 || !trie.contains(signature).unwrap() {
+        while block.previous_block_header.len() > 0 && !trie.contains(signature).unwrap() {
             header = block.previous_block_header.clone();
             let mut block_serialized = keyvalue::get(&header).unwrap().unwrap();
             let mut block: Block = serde_json::from_slice(&block_serialized.as_slice()).unwrap();

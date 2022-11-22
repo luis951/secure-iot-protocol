@@ -146,10 +146,31 @@ pub fn storage_tests(){
 
 }
 
-pub fn comm_test(){
+pub async fn comm_tests(){
+    println!("\n\n--------------------- COMMUNICATION MODULE TESTS ---------------------");
+
     let msg = communication::messages::Message::generate(1);
-    let serialized_msg = serde_json::to_string(&msg).unwrap();
-    let deserialized_msg: communication::messages::Message = serde_json::from_str(&serialized_msg).unwrap();
+    let serialized_msg = match serde_json::to_string(&msg) {
+        Ok(m) => {
+            println!("Communication module test #1: OK\n");
+            m
+        },
+        Err(e) => panic!("Communication module test #1: FAILED\nERROR: {}", e),
+    };
+    let deserialized_msg: communication::messages::Message = match serde_json::from_str(&serialized_msg) {
+        Ok(m) => {
+            println!("Communication module test #2: OK\n");
+            m
+        },
+        Err(e) => panic!("Communication module test #2: FAILED\nERROR: {}", e),
+    };
+    let _: communication::responses::Response = match deserialized_msg.execute("192.0.0.1:1000".to_string()).await {
+        Ok(r) => {
+            println!("Communication module test #3: OK\n");
+            r
+        },
+        Err(e) => panic!("Communication module test #3: FAILED\nERROR: {}", e),
+    };
 }
 
 fn checksum(data: &[u8]) -> u32 {

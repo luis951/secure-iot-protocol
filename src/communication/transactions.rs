@@ -75,7 +75,7 @@ impl Transaction {
         let (data, balance_variation): (TransactionData,i64) = match transaction_type {
             6 => {
                 let data = DataTransactionType6::generate();
-                (TransactionData::Type6(data), std::i64::MAX)
+                (TransactionData::Type6(data), 1000000)
             }
             _ => {
                 panic!("invalid transaction type");
@@ -101,7 +101,7 @@ impl Transaction {
         let (data, balance_variation): (TransactionData,i64) = match transaction_type {
             2 => {
                 let transaction_data = DataTransactionType2::generate(data);
-                (TransactionData::Type2(transaction_data), 1)
+                (TransactionData::Type2(transaction_data), -1)
             }
             _ => {
                 panic!("invalid transaction type");
@@ -120,17 +120,17 @@ impl Transaction {
         }
     }
 
-    fn generate_vec_and_i64(transaction_type: u32, data: Vec<u8>, value: i64) -> Self {
+    pub fn generate_vec_and_i64(transaction_type: u32, data: Vec<u8>, value: i64) -> Self {
         let timestamp = chrono::Utc::now().timestamp();
         let sk = keyvalue::get(b"secret_key").unwrap().unwrap();
         let pk = signature::generate_public_key(sk.as_slice());
         let (data, balance_variation): (TransactionData,i64) = match transaction_type {
             7 => {
                 let transaction_data = DataTransactionType7 {
-                    recipient_pk: signature::generate_public_key(data.as_slice()),
+                    recipient_pk: data.as_slice().try_into().unwrap(),
                     balance_variation: value,
                 };
-                (TransactionData::Type7(transaction_data), value + 1)
+                (TransactionData::Type7(transaction_data), -1 * (value + 1))
             }
             _ => {
                 panic!("invalid transaction type");

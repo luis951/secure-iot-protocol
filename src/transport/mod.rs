@@ -15,8 +15,6 @@ use tokio::sync::Mutex;
 
 use crate::{PORT_NUMBER, communication::{messages::{Packet}, responses::Response}};
 
-
-
 lazy_static! {
     // QUIC_CONN.1 = Endpoint, QUIC_CONN.2 = IncomingConnections
 

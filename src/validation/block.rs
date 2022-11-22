@@ -46,7 +46,7 @@ impl Block {
             let mut previous_state = match previous_block_header.len(){
                 0 => {AddressesState::new()},
                 _ => {
-                    let previous_block: Block = serde_json::from_slice(previous_block_header.clone().as_slice()).unwrap();
+                    let previous_block: Block = serde_json::from_slice(storage::keyvalue::get(previous_block_header.clone().as_slice()).unwrap().unwrap().as_slice()).unwrap();
                     let previous_state = previous_block.addresses_state;
                     previous_state
                 }
@@ -226,6 +226,9 @@ impl LocalBlock {
                             let block = Block::create_from_local_trie().await;
                             block.clone().save_to_blockchain();
                             block.clone().send_block(None).await;
+
+                            *t_n = 0;
+                            merkle::reset_local_trie().await;
                         }
                     }
                     Ok(())

@@ -93,6 +93,7 @@ async fn main() -> Result<()> {
         testing::transport_tests().await;
         testing::signature_tests();
         testing::storage_tests();
+        testing::comm_tests().await;
         return Ok(());
     }
 
@@ -133,11 +134,16 @@ async fn main() -> Result<()> {
         // }
     }
     loop {
+        println!("Chave pública do vértice: {}", hex::encode(signature::generate_public_key(
+            &keyvalue::get(b"secret_key").unwrap().unwrap()
+        )));
         println!("Menu:");
         println!("1. Enviar mensagem de conexão");
         println!("2. Enviar transação");
         println!("3. Solicitar estado atual da blockchain");
         println!("4. Buscar transação pelo cabeçalho");
+        println!("5. Transferir valor");
+        println!("6. Enviar bloco local e resetar estado");
 
         let mut unformatted_input = String::new();
         std::io::stdin().read_line(&mut unformatted_input).unwrap();
@@ -190,6 +196,12 @@ async fn main() -> Result<()> {
                                 println!("Transação Tipo: 6");
                                 println!("Contém chave pública de assinatura federada");
                             },
+                            TransactionData::Type7(t_data) => {
+                                println!("Transação Tipo: 7");
+                                println!("Valor transferido: {:?}", t_data.balance_variation);
+                                print!("Chave pública do remetente: {:?}", hex::encode(t.pk));
+                                println!("Chave pública do destinatário: {:?}", hex::encode(t_data.recipient_pk));
+                            },
                             _ => {
                                 println!("Transação Tipo: outro");
                             },
@@ -198,6 +210,46 @@ async fn main() -> Result<()> {
                     None => {
                         println!("Transação não encontrada");
                     },
+                }
+            },
+            5 => {
+                println!("Insira chave pública do destinatário:");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap();
+                input = input.trim().to_string();
+                println!("Insira valor a ser transferido:");
+                let mut input2 = String::new();
+                std::io::stdin().read_line(&mut input2).unwrap();
+                input2 = input2.trim().to_string();
+                let value: i64;
+                match input2.parse() {
+                    Ok(num) => value = num,
+                    Err(_) => {
+                        println!("Valor inválido");
+                        continue
+                    },
+                }
+                let transaction = Transaction::generate_vec_and_i64(7, 
+                                    hex::decode(input).unwrap(), value);
+
+                
+                LocalBlock::insert_transaction(transaction.clone()).await;
+                let message = Packet::Message(Message::generate_with_transaction(3, transaction.clone()));
+                for (addr, _) in Neighbors::restore().neighbors {
+                    println!("Enviando para {}", addr);
+                    transport::send(addr, serde_json::to_string(&message).unwrap()).await;
+                }
+            },
+            6 => {
+                println!("SENDING BLOCK AND RESETTING");
+                if INIT_BLOCKCHAIN.to_owned() {
+                    let block = Block::create_from_local_trie().await;
+                    block.clone().save_to_blockchain();
+                    block.clone().send_block(None).await;
+
+                    let mut t_n = merkle::LOCAL_BLOCK_SIZE.write().await;
+                    *t_n = 0;
+                    merkle::reset_local_trie().await;
                 }
             },
             _ => {
@@ -252,4 +304,7 @@ async fn create_new_blockchain() {
     let initial_block: Block = Block::create_from_local_trie().await;
     initial_block.save_to_blockchain();
     
+    let mut t_n = merkle::LOCAL_BLOCK_SIZE.write().await;
+    *t_n = 0;
+    merkle::reset_local_trie().await;
 }

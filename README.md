@@ -20,13 +20,13 @@ This project is still under development, below are the next goals in order to ac
 All you need to build this project is the latest release cargo version (I am currently using 1.63.0)
 
 ## 📫 Contributions
-<!---Se o seu README for longo ou se você tiver algum processo ou etapas específicas que deseja que os contribuidores sigam, considere a criação de um arquivo CONTRIBUTING.md separado--->
-Para contribuir com <nome_do_projeto>, siga estas etapas:
+
+To contribuite with with this project, follow the steps below:
 
 1. Clone this repo.
 2. Create a branch: `git checkout -b <branch_name>`.
 3. Commit your changes: `git commit -m '<commit-message>'`
-4. Send your changes to the master branch: `git push origin master`
+4. Send your changes to the main branch: `git push origin main`
 5. Create a pull request.
 
-[⬆ Voltar ao topo](#Secure_IoT_Protocol)<br>
+[⬆ Go back to the top](#secure-iot-protocol)<br>

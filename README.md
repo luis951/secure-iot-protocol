@@ -21,7 +21,7 @@ All you need to build this project is the latest release cargo version (I am cur
 
 ## 📫 Contributions
 
-To contribute with with this project, follow the steps below:
+To contribute with this project, follow the steps below:
 
 1. Clone this repo.
 2. Create a branch: `git checkout -b <branch_name>`.
